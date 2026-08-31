@@ -1,0 +1,146 @@
+import { prisma } from '../../config/prisma.js';
+import { ApiError } from '../../utils/ApiError.js';
+import { SYSTEM_ADMIN_EMAIL } from '../../config/env.js';
+import { hashPassword } from '../../utils/password.js';
+import { toPublicMember, toPublicMembers } from './users.mapper.js';
+
+export async function listMembers(actor: { sub: string; role: string }) {
+  // Leads only ever see themselves + the Member accounts they created
+  // (managed_by_id = their id). Admin+ sees the whole directory.
+  const where =
+    actor.role === 'Lead' ? { OR: [{ id: actor.sub }, { managed_by_id: actor.sub }] } : undefined;
+
+  // Fetch only the public columns — never the bcrypt password_hash — which the
+  // mapper was already stripping in memory after the row was read. This avoids
+  // transferring the hash from the database on every session start, when this
+  // endpoint is fired app-wide for every logged-in user. Response shape is
+  // unchanged: the exact same fields toPublicMember() would have returned.
+  const members = await prisma.teamMember.findMany({
+    where,
+    orderBy: { name: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      is_first_login: true,
+      phone: true,
+      location: true,
+      department: true,
+      bio: true,
+      avatar_url: true,
+      is_paused: true,
+      created_at: true,
+      managed_by_id: true,
+    },
+  });
+  return toPublicMembers(members);
+}
+
+export async function getMember(id: string, actor: { sub: string; role: string }) {
+  const member = await prisma.teamMember.findUnique({ where: { id } });
+  if (!member) throw ApiError.notFound('User not found');
+  const isAdmin = actor.role === 'Admin' || actor.role === 'super-admin';
+  const canView = isAdmin || actor.sub === member.id || member.managed_by_id === actor.sub;
+  if (!canView) throw ApiError.forbidden('You do not have permission to view this user');
+  return toPublicMember(member);
+}
+
+export async function createMember(input: {
+  name: string;
+  email: string;
+  password: string;
+  role: string;
+  managed_by_id?: string | null;
+}) {
+  const existing = await prisma.teamMember.findUnique({ where: { email: input.email } });
+  if (existing) throw ApiError.conflict('A user with that email already exists');
+
+  const password_hash = await hashPassword(input.password);
+  const member = await prisma.teamMember.create({
+    data: {
+      name: input.name,
+      email: input.email,
+      role: input.role,
+      password_hash,
+      managed_by_id: input.managed_by_id ?? null,
+      is_first_login: true,
+    },
+  });
+  return toPublicMember(member);
+}
+
+interface UpdateInput {
+  name?: string;
+  role?: string;
+  phone?: string | null;
+  location?: string | null;
+  department?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
+  is_first_login?: boolean;
+}
+
+// `actor` is the authenticated caller. Self-service profile edits are allowed;
+// role changes and editing other users require Admin+ (enforced in the route).
+export async function updateMember(id: string, input: UpdateInput) {
+  const target = await prisma.teamMember.findUnique({ where: { id } });
+  if (!target) throw ApiError.notFound('User not found');
+
+  if (target.email === SYSTEM_ADMIN_EMAIL && (input.role || input.name)) {
+    // The original app forbids modifying the system admin's name/role.
+    if (input.role && input.role !== target.role) {
+      throw ApiError.forbidden('The system administrator account cannot be modified.');
+    }
+  }
+
+  const member = await prisma.teamMember.update({
+    where: { id },
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.role !== undefined ? { role: input.role } : {}),
+      ...(input.phone !== undefined ? { phone: input.phone } : {}),
+      ...(input.location !== undefined ? { location: input.location } : {}),
+      ...(input.department !== undefined ? { department: input.department } : {}),
+      ...(input.bio !== undefined ? { bio: input.bio } : {}),
+      ...(input.avatar_url !== undefined ? { avatar_url: input.avatar_url } : {}),
+      ...(input.is_first_login !== undefined ? { is_first_login: input.is_first_login } : {}),
+    },
+  });
+  return toPublicMember(member);
+}
+
+export async function deleteMember(
+  id: string,
+  actor: { sub: string; role: string },
+) {
+  const target = await prisma.teamMember.findUnique({ where: { id } });
+  if (!target) throw ApiError.notFound('User not found');
+  if (target.email === SYSTEM_ADMIN_EMAIL) {
+    throw ApiError.forbidden('The system administrator account cannot be deleted.');
+  }
+
+  // Admins/super-admins may remove anyone (except the system admin above).
+  // Leads may only remove Member accounts they created (managed_by_id = their id).
+  const isAdmin = actor.role === 'Admin' || actor.role === 'super-admin';
+  const leadsOwnMember = actor.role === 'Lead' && target.role === 'Member' && target.managed_by_id === actor.sub;
+  if (!isAdmin && !leadsOwnMember) {
+    throw ApiError.forbidden('Leads can only remove Members they created.');
+  }
+
+  await prisma.teamMember.delete({ where: { id } });
+  return { ok: true };
+}
+
+export async function setPaused(id: string, isPaused: boolean) {
+  const target = await prisma.teamMember.findUnique({ where: { id } });
+  if (!target) throw ApiError.notFound('User not found');
+  if (target.email === SYSTEM_ADMIN_EMAIL) {
+    throw ApiError.forbidden('The system administrator account cannot be paused.');
+  }
+  const member = await prisma.teamMember.update({
+    where: { id },
+    data: { is_paused: isPaused },
+  });
+  return toPublicMember(member);
+}
