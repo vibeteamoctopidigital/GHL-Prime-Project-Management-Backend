@@ -7,15 +7,15 @@ export interface Actor {
 
 // Who a caller is allowed to see:
 //
-//   Admin / super-admin -> everyone (no restriction)
-//   Lead                -> themselves + every Member they created (managed_by_id)
-//   Member              -> themselves only
+//   CEO / HR / DEPT HEAD -> everyone (no restriction)
+//   Team Lead            -> themselves + every member they created (managed_by_id)
+//   team member          -> themselves only
 //
 // This is the single source of truth for read scoping on tasks, assignments,
-// time logs, activity and stats, so one Lead can never see another Lead's team
-// through any endpoint. It lives on the server: the board and reports pages
-// send no team parameter of their own, so there is nothing a client could
-// tamper with to widen its own scope.
+// time logs, activity and stats, so one Team Lead can never see another Team
+// Lead's team through any endpoint. It lives on the server: the board and
+// reports pages send no team parameter of their own, so there is nothing a
+// client could tamper with to widen its own scope.
 //
 // Everything below is expressed as a *filter* rather than a list of member
 // ids. Resolving the id list first cost an extra database round trip on every
@@ -25,14 +25,18 @@ export interface Actor {
 // (role, sub), it can be expressed as a nested relation filter that the main
 // query resolves in the same trip. Same rows, half the latency.
 
+// Roles with org-wide visibility. Everyone else is narrowed: a Team Lead to
+// their own team, a team member to themselves.
+const UNSCOPED_ROLES = new Set(['CEO', 'HR', 'DEPT HEAD']);
+
 export function isUnscoped(actor?: Actor): boolean {
-  return !actor || actor.role === 'Admin' || actor.role === 'super-admin';
+  return !actor || UNSCOPED_ROLES.has(actor.role ?? '');
 }
 
 /** Matches the TeamMembers this caller may see. undefined = no restriction. */
 export function memberScopeFilter(actor?: Actor): Prisma.TeamMemberWhereInput | undefined {
   if (isUnscoped(actor)) return undefined;
-  if (actor!.role === 'Lead') {
+  if (actor!.role === 'Team Lead') {
     return { OR: [{ id: actor!.sub }, { managed_by_id: actor!.sub }] };
   }
   return { id: actor!.sub };
@@ -89,7 +93,7 @@ export function isMemberInScope(
   if (isUnscoped(actor)) return true;
   if (!member) return false;
   if (member.id === actor!.sub) return true;
-  return actor!.role === 'Lead' && member.managed_by_id === actor!.sub;
+  return actor!.role === 'Team Lead' && member.managed_by_id === actor!.sub;
 }
 
 /**
@@ -106,7 +110,7 @@ export function scopeCacheKey(actor?: Actor): string {
  */
 export function memberScopeSql(column: Prisma.Sql, actor?: Actor): Prisma.Sql | null {
   if (isUnscoped(actor)) return null;
-  if (actor!.role === 'Lead') {
+  if (actor!.role === 'Team Lead') {
     return Prisma.sql`${column} IN (
       SELECT id FROM team_members WHERE id = ${actor!.sub}::uuid OR managed_by_id = ${actor!.sub}::uuid
     )`;

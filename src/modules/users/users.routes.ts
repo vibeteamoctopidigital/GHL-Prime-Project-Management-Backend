@@ -23,7 +23,7 @@ usersRouter.get('/:id', validate({ params: idParamSchema }), asyncHandler(contro
 // Admin+ may invite anyone up to their own rank.
 usersRouter.post(
   '/',
-  requireRole('Lead'),
+  requireRole('Team Lead'),
   validate({ body: createMemberSchema }),
   asyncHandler(controller.create),
 );
@@ -37,14 +37,14 @@ usersRouter.patch(
 
 usersRouter.delete(
   '/:id',
-  requireRole('Lead'),
+  requireRole('Team Lead'),
   validate({ params: idParamSchema }),
   asyncHandler(controller.remove),
 );
 
 usersRouter.post(
   '/:id/pause',
-  requireRole('Admin'),
+  requireRole('DEPT HEAD'),
   validate({ params: idParamSchema, body: pauseSchema }),
   asyncHandler(controller.pause),
 );

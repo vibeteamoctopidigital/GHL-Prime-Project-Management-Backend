@@ -80,7 +80,7 @@ export async function updateStatus(
     }
 
     // Members are additionally locked once they log time, at any status.
-    if (currentUser?.role === 'Member' && loggedByMember) {
+    if (currentUser?.role === 'team member' && loggedByMember) {
       throw ApiError.forbidden('You cannot change the status after logging time for this task.');
     }
   }
