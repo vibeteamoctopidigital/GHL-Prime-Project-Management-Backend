@@ -8,7 +8,7 @@ export async function listMembers(actor: { sub: string; role: string }) {
   // Leads only ever see themselves + the Member accounts they created
   // (managed_by_id = their id). Admin+ sees the whole directory.
   const where =
-    actor.role === 'Lead' ? { OR: [{ id: actor.sub }, { managed_by_id: actor.sub }] } : undefined;
+    actor.role === 'Team Lead' ? { OR: [{ id: actor.sub }, { managed_by_id: actor.sub }] } : undefined;
 
   // Fetch only the public columns — never the bcrypt password_hash — which the
   // mapper was already stripping in memory after the row was read. This avoids
@@ -40,7 +40,7 @@ export async function listMembers(actor: { sub: string; role: string }) {
 export async function getMember(id: string, actor: { sub: string; role: string }) {
   const member = await prisma.teamMember.findUnique({ where: { id } });
   if (!member) throw ApiError.notFound('User not found');
-  const isAdmin = actor.role === 'Admin' || actor.role === 'super-admin';
+  const isAdmin = ['CEO', 'HR', 'DEPT HEAD'].includes(actor.role ?? '');
   const canView = isAdmin || actor.sub === member.id || member.managed_by_id === actor.sub;
   if (!canView) throw ApiError.forbidden('You do not have permission to view this user');
   return toPublicMember(member);
@@ -122,8 +122,8 @@ export async function deleteMember(
 
   // Admins/super-admins may remove anyone (except the system admin above).
   // Leads may only remove Member accounts they created (managed_by_id = their id).
-  const isAdmin = actor.role === 'Admin' || actor.role === 'super-admin';
-  const leadsOwnMember = actor.role === 'Lead' && target.role === 'Member' && target.managed_by_id === actor.sub;
+  const isAdmin = ['CEO', 'HR', 'DEPT HEAD'].includes(actor.role ?? '');
+  const leadsOwnMember = actor.role === 'Team Lead' && target.role === 'team member' && target.managed_by_id === actor.sub;
   if (!isAdmin && !leadsOwnMember) {
     throw ApiError.forbidden('Leads can only remove Members they created.');
   }

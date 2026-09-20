@@ -1,14 +1,20 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ApiError } from '../utils/ApiError.js';
 
-// Role hierarchy mirrors the frontend: super-admin > Admin > Lead > Member.
-export type Role = 'super-admin' | 'Admin' | 'Lead' | 'Member';
+// Role hierarchy mirrors the frontend:
+//   CEO > HR > DEPT HEAD > Team Lead > team member
+//
+// These strings are stored verbatim in team_members.role, so the value in the
+// database and the label shown in the UI are the same thing — there is no
+// separate display-name mapping to keep in sync.
+export type Role = 'CEO' | 'HR' | 'DEPT HEAD' | 'Team Lead' | 'team member';
 
 const RANK: Record<string, number> = {
-  'super-admin': 3,
-  Admin: 2,
-  Lead: 1,
-  Member: 0,
+  CEO: 4,
+  HR: 3,
+  'DEPT HEAD': 2,
+  'Team Lead': 1,
+  'team member': 0,
 };
 
 /** Require the caller's role to be at least `minRole`. Assumes requireAuth ran first. */

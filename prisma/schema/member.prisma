@@ -2,7 +2,7 @@ model TeamMember {
   id             String   @id @default(uuid()) @db.Uuid
   name           String
   email          String   @unique
-  role           String // 'super-admin' | 'Admin' | 'Lead' | 'Member'
+  role           String // 'CEO' | 'HR' | 'DEPT HEAD' | 'Team Lead' | 'team member'
   password_hash  String? // bcrypt hash; nullable for legacy rows pending reset
   is_first_login Boolean  @default(true)
   phone          String?

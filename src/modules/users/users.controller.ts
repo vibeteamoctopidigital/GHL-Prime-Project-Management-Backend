@@ -14,9 +14,10 @@ export async function getOne(req: Request, res: Response) {
 // getAvailableRoles (features/users/constants.tsx). Enforced here too since the
 // route only gates the minimum rank to reach this handler at all.
 const ASSIGNABLE_ROLES: Record<string, string[]> = {
-  'super-admin': ['super-admin', 'Admin', 'Lead', 'Member'],
-  Admin: ['Lead', 'Member'],
-  Lead: ['Member'],
+  CEO: ['CEO', 'HR', 'DEPT HEAD', 'Team Lead', 'team member'],
+  HR: ['DEPT HEAD', 'Team Lead', 'team member'],
+  'DEPT HEAD': ['Team Lead', 'team member'],
+  'Team Lead': ['team member'],
 };
 
 export async function create(req: Request, res: Response) {
@@ -29,7 +30,7 @@ export async function create(req: Request, res: Response) {
   }
 
   // A member invited by a Lead is "under" that Lead — scopes their board/reports.
-  const managed_by_id = actor.role === 'Lead' ? actor.sub : null;
+  const managed_by_id = actor.role === 'Team Lead' ? actor.sub : null;
 
   const user = await service.createMember({ ...req.body, managed_by_id });
   res.status(201).json({ user });
@@ -39,7 +40,7 @@ export async function update(req: Request, res: Response) {
   const actor = req.user!;
   const targetId = req.params.id;
   const isSelf = actor.sub === targetId;
-  const isAdmin = actor.role === 'Admin' || actor.role === 'super-admin';
+  const isAdmin = ['CEO', 'HR', 'DEPT HEAD'].includes(actor.role ?? '');
 
   // Only admins may edit other users or change roles.
   if (!isSelf && !isAdmin) throw ApiError.forbidden();

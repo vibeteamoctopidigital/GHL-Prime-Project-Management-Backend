@@ -382,7 +382,7 @@ export async function updateTask(
 
       // Members are additionally locked once they personally log time.
       if (
-        currentUser?.role === 'Member' &&
+        currentUser?.role === 'team member' &&
         logs.some((t) => t.member_id === currentUser.sub && isLogged(t))
       ) {
         throw ApiError.forbidden('You cannot change the status after logging time for this task.');
@@ -450,7 +450,7 @@ export async function deleteTask(
 
   // Members may only delete tasks on their own board (tasks they are assigned
   // to). Leads, Admins and super-admin can delete any task.
-  if (currentUser?.role === 'Member') {
+  if (currentUser?.role === 'team member') {
     const isOwn = task.assignments.some((a) => a.member_id === currentUser.sub);
     if (!isOwn) {
       throw ApiError.forbidden('Members can only delete their own tasks.');

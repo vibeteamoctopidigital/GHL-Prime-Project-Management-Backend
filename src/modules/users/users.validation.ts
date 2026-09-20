@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ROLES = ['super-admin', 'Admin', 'Lead', 'Member'] as const;
+export const ROLES = ['CEO', 'HR', 'DEPT HEAD', 'Team Lead', 'team member'] as const;
 
 export const createMemberSchema = z.object({
   name: z.string().min(1),

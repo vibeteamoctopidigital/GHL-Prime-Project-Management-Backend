@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 const SUPER_ADMIN = {
   name: 'Super Admin',
   email: 'superadmin@gmail.com',
-  role: 'super-admin',
+  role: 'CEO',
   password: 'superadmin123',
 };
 
